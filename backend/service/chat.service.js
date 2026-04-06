@@ -2,18 +2,24 @@ import fetch from 'node-fetch'
 import { getConfig } from './config.service.js'
 import { saveChatRecord } from './chatRecord.service.js'
 
+// 过滤多余换行（核心解决换行越来越多）
+const cleanText = (text) => {
+  if (!text) return ''
+  return text.replace(/\n+/g, ' ').trim()
+}
+
 export const streamChat = async (req, res) => {
   try {
     const config = getConfig()
     const llamaUrl = `http://localhost:${config.port.llama}/v1/completions`
 
-    // SSE 标准响应头
+    // SSE 流式头
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
     res.setHeader('Cache-Control', 'no-cache')
     res.setHeader('Connection', 'keep-alive')
     res.setHeader('X-Accel-Buffering', 'no')
+    res.setHeader('Access-Control-Allow-Origin', '*')
 
-    // 请求 llama
     const resp = await fetch(llamaUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -27,13 +33,53 @@ export const streamChat = async (req, res) => {
     })
 
     if (!resp.ok) {
-      throw new Error(`Llama 返回错误 ${resp.status}`)
+      throw new Error(`Llama错误 ${resp.status}`)
     }
 
-    // 流式转发
-    resp.body.pipe(res)
+    // -----------------------
+    // 兼容 node-fetch@2 流
+    // -----------------------
+    let buffer = ''
 
-    // 客户端断开时停止
+    resp.body.on('data', (chunk) => {
+      buffer += chunk.toString('utf8')
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+
+        const dataStr = line.substring(6)
+        if (dataStr === '[DONE]') {
+          res.write(`data: [DONE]\n\n`)
+          continue
+        }
+
+        try {
+          const data = JSON.parse(dataStr)
+          if (data.choices?.[0]) {
+            // 过滤换行！
+            data.choices[0].text = cleanText(data.choices[0].text)
+
+            // 只转发有内容的片段 → 前端逐字输出
+            if (data.choices[0].text || data.choices[0].finish_reason) {
+              res.write(`data: ${JSON.stringify(data)}\n\n`)
+            }
+          }
+        } catch (e) {}
+      }
+    })
+
+    resp.body.on('end', () => {
+      res.write(`data: [DONE]\n\n`)
+      res.end()
+    })
+
+    resp.body.on('error', (err) => {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`)
+      res.end()
+    })
+
     req.on('close', () => {
       resp.body.destroy()
       res.end()
@@ -41,41 +87,34 @@ export const streamChat = async (req, res) => {
 
   } catch (e) {
     console.error('代理错误：', e)
+    res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`)
     res.end()
   }
 }
 
-// 新增：保存单条消息到聊天记录
+// 保存消息（自动过滤换行）
 export const saveChatMessage = async (req, res) => {
   try {
     const { roleName, userName, message } = req.body
-    // 构建傻酒馆格式的消息体（预留拓展字段）
+    const cleanMes = cleanText(message.mes || '')
+    
     const chatMessage = {
-      name: message.sender_name,
+      name: message.name,
       is_user: message.is_user,
       is_system: false,
       send_date: new Date().toISOString(),
-      mes: message.content,
-      extra: {
-        isSmallSys: false,
-        reasoning: "", // 预留
-        api: "", // 预留
-        model: "" // 预留
-      },
-      force_avatar: message.avatar || '/thumbnail?type=persona&file=user-default.png', // 预留头像
-      // 预留swipes相关
+      mes: cleanMes,
+      extra: { isSmallSys: false },
+      force_avatar: message.force_avatar,
       swipes: [],
       swipe_id: 0,
-      swipe_info: [],
-      // 预留生成信息
       gen_started: message.is_user ? null : new Date().toISOString(),
       gen_finished: message.is_user ? null : new Date().toISOString()
     }
-    // 保存到JSON文件
+
     const record = saveChatRecord(roleName, userName, chatMessage)
     res.json({ success: true, record })
   } catch (e) {
-    console.error('保存聊天记录失败：', e)
     res.status(500).json({ success: false, error: e.message })
   }
 }

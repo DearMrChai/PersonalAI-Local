@@ -174,21 +174,22 @@ async function send() {
     messages.value.push(aiMsg);
     scrollToBottom();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = decoder.decode(value);
-      const lines = chunk.split("\n").filter((i) => i.trim());
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const json = line.slice(6);
-        if (json === "[DONE]") continue;
-        const data = JSON.parse(json);
-        const t = data.choices?.[0]?.text || "";
-        aiMsg.mes += t;
-        scrollToBottom();
-      }
-    }
+    // 前端Chat.vue中send方法的流式处理部分（已有逻辑可保留，后端过滤后无需修改）
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  const chunk = decoder.decode(value);
+  const lines = chunk.split("\n").filter((i) => i.trim());
+  for (const line of lines) {
+    if (!line.startsWith("data: ")) continue;
+    const json = line.slice(6);
+    if (json === "[DONE]") continue;
+    const data = JSON.parse(json);
+    const t = data.choices?.[0]?.text || "";
+    aiMsg.mes += t; // 后端已过滤换行，直接拼接即可
+    scrollToBottom();
+  }
+}
     // 补全AI消息生成完成时间
     aiMsg.gen_finished = new Date().toISOString();
     // 保存AI消息到后端

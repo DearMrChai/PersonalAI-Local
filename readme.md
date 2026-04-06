@@ -157,3 +157,4 @@ PersonalAI-Local/ # 项目根目录
 4. **扩展规范**：新增功能按「后端加路由+服务 → 前端加页面/组件 → 路由配置」的流程，不修改原有代码，实现无侵入扩展；
 5. **打包规范**：不将大模型/ComfyUI/llama.cpp本体打进EXE，仅打包项目代码和Node运行环境，保持EXE轻量。
 
+<!-- D:\NSWFAI\AI\llama-b8671-bin-win-cpu-x64\llama-server.exe -m "D:\NSWFAI\AI\modles\qwen\Qwen2.5-14B_Uncensored_Instruct-Q4_K_M.gguf" -c 8192 -t 8 -c 2048 --host 0.0.0.0 --port 5001 -->
