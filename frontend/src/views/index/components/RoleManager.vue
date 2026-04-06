@@ -1,51 +1,87 @@
 <template>
   <div class="role-manager">
-    <h2>角色管理</h2>
-
-    <!-- 新建角色按钮 -->
-    <div class="role-toolbar">
-      <el-button type="primary" @click="openEditDialog()">+ 新建角色</el-button>
+    <div class="header">
+      <h3>角色管理</h3>
+      <el-button type="primary" size="small" @click="openEdit()">+ 新建</el-button>
     </div>
 
-    <!-- 角色列表 -->
     <div class="role-list">
       <div
         class="role-item"
-        v-for="role in roleList"
+        v-for="role in roles"
         :key="role.name"
+        :class="{ active: isCurrent(role) }"
       >
-        <div class="role-info">
-          <h4>{{ role.name }}</h4>
-          <p>{{ role.personality || '无性格' }}</p>
-          <p class="tip">{{ role.tone || '无语气' }}</p>
+        <!-- 头像占位区（未来可扩展） -->
+        <div class="avatar">{{ role.name.charAt(0) }}</div>
+
+        <div class="info">
+          <div class="name">{{ role.name }}</div>
+          <div class="desc">{{ role.personality || "未设置" }}</div>
         </div>
-        <div class="role-actions">
-          <el-button size="small" @click="useRole(role)">使用</el-button>
-          <el-button size="small" type="success" @click="openEditDialog(role)">编辑</el-button>
-          <el-button size="small" type="danger" @click="deleteRole(role.name)">删除</el-button>
+
+        <div class="btns">
+          <el-button size="small" type="primary" @click="useRole(role)">
+            使用
+          </el-button>
+          <el-button size="small" type="success" @click="openEdit(role)">
+            编辑
+          </el-button>
         </div>
       </div>
     </div>
 
-    <!-- 编辑 / 新建 弹窗 -->
-    <el-dialog v-model="dialogVisible" title="编辑角色" width="500px">
-      <el-form label-width="80px">
-        <el-form-item label="角色名称">
-          <el-input v-model="editForm.name" placeholder="请输入角色名" />
-        </el-form-item>
-        <el-form-item label="性格设定">
-          <el-input v-model="editForm.personality" type="textarea" rows="2" placeholder="冷静、傲娇、温柔…" />
-        </el-form-item>
-        <el-form-item label="语气风格">
-          <el-input v-model="editForm.tone" type="textarea" rows="2" placeholder="简洁、啰嗦、可爱、高冷…" />
-        </el-form-item>
-        <el-form-item label="开场白">
-          <el-input v-model="editForm.opening" type="textarea" rows="2" placeholder="进入聊天时自动说的第一句话" />
-        </el-form-item>
+    <!-- 全局编辑弹窗（全屏居中，不受窄面板限制） -->
+    <el-dialog
+      v-model="showDialog"
+      title="编辑角色"
+      width="550px"
+      append-to-body
+      destroy-on-close
+    >
+      <el-form :model="form" label-width="100px">
+        <el-collapse v-model="activeCollapse">
+          <el-collapse-item title="基础信息（必填）" name="base">
+            <el-form-item label="角色名称">
+              <el-input v-model="form.name" placeholder="请输入" />
+            </el-form-item>
+            <el-form-item label="性格">
+              <el-input v-model="form.personality" placeholder="温柔、冷静、傲娇" />
+            </el-form-item>
+            <el-form-item label="语气">
+              <el-input v-model="form.tone" placeholder="简短、可爱、高冷" />
+            </el-form-item>
+            <el-form-item label="开场白">
+              <el-input v-model="form.opening" type="textarea" rows="2" />
+            </el-form-item>
+          </el-collapse-item>
+
+          <el-collapse-item title="角色设定（选填）" name="extra">
+            <el-form-item label="角色描述">
+              <el-input v-model="form.description" type="textarea" rows="2" />
+            </el-form-item>
+            <el-form-item label="对话场景">
+              <el-input v-model="form.scenario" />
+            </el-form-item>
+            <el-form-item label="对话示例">
+              <el-input v-model="form.mesExample" type="textarea" rows="3" placeholder="不填自动生成" />
+            </el-form-item>
+          </el-collapse-item>
+
+          <el-collapse-item title="高级设置（可选）" name="advanced">
+            <el-form-item label="话痨程度">
+              <el-slider v-model.number="form.talkativeness" :min="0" :max="1" :step="0.1" />
+            </el-form-item>
+            <el-form-item label="深度提示词">
+              <el-input v-model="form.depthPrompt" type="textarea" rows="2" />
+            </el-form-item>
+          </el-collapse-item>
+        </el-collapse>
       </el-form>
+
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="saveRole">保存</el-button>
+        <el-button @click="showDialog = false">取消</el-button>
+        <el-button type="primary" @click="save">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -55,108 +91,160 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 
-const roleList = ref([])
-const dialogVisible = ref(false)
-const editForm = ref({
+const roles = ref([])
+const showDialog = ref(false)
+const activeCollapse = ref(['base'])
+
+const form = ref({
   name: '',
   personality: '',
   tone: '',
-  opening: ''
+  opening: '',
+  description: '',
+  scenario: '日常聊天',
+  mesExample: '',
+  talkativeness: 0.5,
+  depthPrompt: '不要OOC，严格扮演角色，不偏离人设',
 })
 
-// 加载角色列表
-async function loadRoles() {
+onMounted(load)
+
+async function load() {
   const res = await fetch('/api/roles')
-  roleList.value = await res.json()
+  roles.value = await res.json()
 }
 
-// 打开编辑框
-function openEditDialog(role = null) {
-  if (role) {
-    editForm.value = { ...role }
+function openEdit(row = null) {
+  if (row) {
+    form.value = { ...row }
   } else {
-    editForm.value = { name: '', personality: '', tone: '', opening: '' }
+    form.value = {
+      name: '',
+      personality: '',
+      tone: '',
+      opening: '',
+      description: '',
+      scenario: '日常聊天',
+      mesExample: '',
+      talkativeness: 0.5,
+      depthPrompt: '不要OOC，严格扮演角色，不偏离人设',
+    }
   }
-  dialogVisible.value = true
+  showDialog.value = true
 }
 
-// 保存角色（新增+更新）
-async function saveRole() {
-  if (!editForm.value.name.trim()) {
-    ElMessage.warning('角色名不能为空')
-    return
-  }
-
+async function save() {
+  if (!form.value.name) return ElMessage.warning('角色名必填')
   await fetch('/api/roles', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(editForm.value)
+    body: JSON.stringify(form.value),
   })
-
+  showDialog.value = false
+  load()
   ElMessage.success('保存成功')
-  dialogVisible.value = false
-  loadRoles()
 }
 
-// 删除角色
-async function deleteRole(name) {
-  if (!confirm(`确定要删除角色【${name}】吗？`)) return
-
+async function del(name) {
+  if (!confirm('确定删除？')) return
   await fetch(`/api/roles/${name}`, { method: 'DELETE' })
-  ElMessage.success('删除成功')
-  loadRoles()
+  load()
 }
 
-// ✅ 修复：无跳转、无刷新
 function useRole(role) {
   localStorage.setItem('currentRole', JSON.stringify(role))
-  ElMessage.success(`已选择角色：${role.name}`)
+  ElMessage.success('已选择：' + role.name)
   window.dispatchEvent(new Event('role-changed'))
 }
 
-onMounted(() => {
-  loadRoles()
-})
+function isCurrent(role) {
+  const curr = localStorage.getItem('currentRole')
+  if (!curr) return false
+  return JSON.parse(curr).name === role.name
+}
 </script>
 
 <style scoped>
 .role-manager {
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-}
-.role-toolbar {
-  margin: 10px 0 20px;
-}
-.role-list {
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  overflow: hidden;
 }
-.role-item {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  padding: 14px;
+
+.header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 12px;
+  flex-shrink: 0;
 }
-.role-info h4 {
-  margin: 0 0 6px;
+
+.header h3 {
+  margin: 0;
   font-size: 16px;
 }
-.role-info p {
-  margin: 0;
-  color: #666;
+
+.role-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
+}
+
+.role-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.role-item.active {
+  border-color: #ff7d24;
+  background: #fff9f5;
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.info .name {
+  font-weight: 600;
   font-size: 14px;
 }
-.role-info .tip {
-  color: #999;
+
+.info .desc {
   font-size: 12px;
-  margin-top: 4px;
+  color: #666;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.role-actions {
+
+.btns {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>

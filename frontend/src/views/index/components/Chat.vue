@@ -1,270 +1,354 @@
 <template>
-  <div class="chat-wrapper">
+  <div class="chat-page" :style="{ background: chatBg }">
     <div class="chat-header">
-      <h3>💬 正在与：{{ currentRole.name || '请先选择角色' }}</h3>
-      <el-button type="info" @click="$router.push('/role-manager')">切换角色</el-button>
-      <el-tag :type="llamaStatus ? 'success' : 'danger'" size="small">
-        Llama：{{ llamaStatus ? '运行中' : '未启动' }}
-      </el-tag>
-    </div>
-    <div class="chat-box">
-      <div class="msg" v-for="(m,i) in msgs" :key="i" :class="m.role">
-        <div class="bubble">{{ m.content }}</div>
-        <img v-if="m.image" :src="m.image" class="msg-img" />
+      <div class="title">
+        <span>与 {{ currentRole.name || '未选择角色' }}</span>
+        <el-button size="small" @click="openUserSwitch" type="text">
+          {{ currentUser.name || '选择身份' }}
+        </el-button>
       </div>
-      <div v-if="loading" class="loading">思考中…</div>
+      <el-button size="small" @click="clearChat" type="danger">清空对话</el-button>
     </div>
-    <div class="chat-input">
-      <el-input 
-        v-model="text" 
-        type="textarea" 
-        :rows="2" 
-        placeholder="输入消息" 
-        @keyup.enter="send" 
-        :disabled="!llamaStatus"
-      />
-      <div style="display: flex; gap: 8px; margin-top: 8px">
-        <el-button 
-          type="primary" 
-          @click="send" 
-          :disabled="!llamaStatus || !currentRole.name || !text.trim()"
-        >发送</el-button>
-        <el-button 
-          type="warning" 
-          @click="stopGenerate" 
-          v-if="generating"
-        >打断</el-button>
+
+    <div class="message-list" ref="msgList">
+      <!-- 修复：字段名匹配 + 时间格式化 -->
+      <div v-for="(msg, idx) in messages" :key="idx" class="msg-item" :class="{ user: msg.is_user }">
+        <div class="avatar">
+          <!-- 修复：头像显示逻辑（使用force_avatar构建图片） -->
+          <img :src="msg.force_avatar" alt="avatar" class="avatar-img" />
+        </div>
+        <div class="bubble">
+          <div class="name">{{ msg.name }}</div>
+          <!-- 修复：消息内容使用mes字段，处理换行 -->
+          <div class="content" v-html="formatContent(msg.mes)"></div>
+          <!-- 修复：时间使用send_date并格式化 -->
+          <div class="time">{{ formatTime(msg.send_date) }}</div>
+        </div>
       </div>
+      <div v-if="loading" class="loading">正在输入...</div>
     </div>
+
+    <div class="chat-input-bar">
+      <el-input v-model="inputText" type="textarea" rows="2" placeholder="输入消息" @keyup.enter="send" />
+      <el-button type="primary" @click="send" :disabled="!currentRole.name || !inputText.trim()">发送</el-button>
+    </div>
+
+    <el-dialog v-model="showUserDialog" title="切换用户身份" width="400px">
+      <el-radio-group v-model="currentUser" @change="saveCurrentUser">
+        <el-radio v-for="u in users" :key="u.id" :label="u">
+          {{ u.name }}
+        </el-radio>
+      </el-radio-group>
+      <template #footer>
+        <el-button @click="showUserDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, watch, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 
-const msgs = ref([])
-const text = ref('')
 const currentRole = ref({})
+const currentUser = ref({ id: 'default', name: '用户', avatar: '/thumbnail?type=persona&file=user-default.png' })
+const users = ref([])
+const messages = ref([])
+const inputText = ref('')
 const loading = ref(false)
-const generating = ref(false)
-const llamaStatus = ref(false)
-let abortController = null // 用于中断请求
-let statusTimer = null
+const showUserDialog = ref(false)
+const chatBg = ref('#f0f2f5')
+const msgList = ref(null)
 
-// 读取当前角色
-function loadCurrentRole() {
-  const r = localStorage.getItem('currentRole')
-  if (!r) {
-    currentRole.value = {}
-    msgs.value = []
-    return
-  }
-  currentRole.value = JSON.parse(r)
-  msgs.value = []
-  if (currentRole.value.opening) {
-    msgs.value.push({ role: 'ai', content: currentRole.value.opening })
-  }
+// 加载用户列表（新增user.service接口）
+async function loadUsers() {
+  const r = await fetch('/api/getUsers')
+  users.value = await r.json()
+  const cu = localStorage.getItem('currentUser')
+  if (cu) currentUser.value = JSON.parse(cu)
 }
 
-// 检测Llama服务状态
-const checkLlamaStatus = async () => {
-  try {
-    const res = await fetch('/api/service-status')
-    const data = await res.json()
-    llamaStatus.value = data.data.llama
-  } catch (e) {
-    llamaStatus.value = false
-  }
+function saveCurrentUser() {
+  localStorage.setItem('currentUser', JSON.stringify(currentUser.value))
 }
 
-// 发送消息（请求后端代理接口，而非直接请求LLama）
+// 改造：加载聊天记录（适配新结构）
+async function loadChat() {
+  if (!currentRole.value.name || !currentUser.value.name) return
+  const res = await fetch(`/api/chat-record?roleName=${encodeURIComponent(currentRole.value.name)}&userName=${encodeURIComponent(currentUser.value.name)}`)
+  const data = await res.json()
+  // 过滤掉metadata占位项，只取消息体
+  messages.value = data.chat?.filter(item => !item.chat_metadata) || []
+  scrollToBottom()
+}
+
+// 改造：发送消息（适配新结构）
 async function send() {
-  const t = text.value.trim()
-  if (!t || !currentRole.value.name) return
-  if (!llamaStatus.value) {
-    ElMessage.error('Llama服务未启动，请先在配置页启动！')
-    return
+  const text = inputText.value.trim()
+  if (!text) return
+
+  // 构建用户消息体（傻酒馆格式）
+  const userMsg = {
+    name: currentUser.value.name,
+    is_user: true,
+    is_system: false,
+    send_date: new Date().toISOString(),
+    mes: text,
+    extra: { isSmallSys: false },
+    force_avatar: currentUser.value.avatar,
+    swipes: [],
+    swipe_id: 0
   }
-
-  // 重置中断控制器
-  if (abortController) abortController.abort()
-  abortController = new AbortController()
-
-  // 追加用户消息
-  msgs.value.push({ role: 'user', content: t })
-  text.value = ''
+  messages.value.push(userMsg)
+  inputText.value = ''
   loading.value = true
-  generating.value = true
-  
-  // 初始化AI回复
-  const currentReply = { role: 'ai', content: '' }
-  msgs.value.push(currentReply)
+  scrollToBottom()
 
-  // 构造prompt
-  const prompt = `
-【角色】${currentRole.value.name}
-性格：${currentRole.value.personality || '正常'}
-语气：${currentRole.value.tone || '正常'}
-用户：${t}
-你只回复一句话：
-  `.trim()
+  // 保存用户消息到后端
+  await saveChatMessage(userMsg)
 
+  const prompt = buildPrompt()
   try {
-    // 改为请求后端代理接口（核心修改）
-    const response = await fetch('/api/chat/stream', {
+    const resp = await fetch('/api/chat/stream', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt }),
-      signal: abortController.signal
+      body: JSON.stringify({ prompt, roleName: currentRole.value.name, userName: currentUser.value.name }),
     })
 
-    if (!response.ok) {
-      throw new Error(`服务端错误：${response.statusText}`)
+    const reader = resp.body.getReader()
+    const decoder = new TextDecoder()
+    // 构建AI消息体（傻酒馆格式）
+    const aiMsg = {
+      name: currentRole.value.name,
+      is_user: false,
+      is_system: false,
+      send_date: new Date().toISOString(),
+      mes: '',
+      extra: {
+        isSmallSys: false,
+        api: "llamacpp", // 预留
+        model: "Llama-3-8B-Instruct-GGUF-Q4_K_M.gguf" // 预留
+      },
+      force_avatar: `${currentRole.value.name}.png`, // 预留
+      swipes: [],
+      swipe_id: 0,
+      gen_started: new Date().toISOString(),
+      gen_finished: null
     }
+    messages.value.push(aiMsg)
+    scrollToBottom()
 
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder('utf-8')
-
-    // 逐块读取流式响应
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-
-      const chunk = decoder.decode(value, { stream: true })
-      const lines = chunk.split('\n').filter(line => line.trim())
-      
+      const chunk = decoder.decode(value)
+      const lines = chunk.split('\n').filter(i => i.trim())
       for (const line of lines) {
-        // 解析SSE格式数据
         if (!line.startsWith('data: ')) continue
-        const jsonStr = line.substring(6).trim()
-        
-        // 结束标记
-        if (jsonStr === '[DONE]') continue
-        
-        // 解析LLama返回的token
-        try {
-          const data = JSON.parse(jsonStr)
-          // 适配LLama的响应格式（不同版本可能是text或delta.content）
-          const token = data.choices?.[0]?.text || data.choices?.[0]?.delta?.content || ''
-          if (token) {
-            currentReply.content += token
-          }
-        } catch (e) {
-          // 忽略解析错误（避免单条数据异常导致整体中断）
-          console.warn('解析流式数据失败：', e, jsonStr)
-        }
+        const json = line.slice(6)
+        if (json === '[DONE]') continue
+        const data = JSON.parse(json)
+        const t = data.choices?.[0]?.text || ''
+        aiMsg.mes += t
+        scrollToBottom()
       }
     }
-
-    // 处理空回复
-    if (!currentReply.content) {
-      currentReply.content = '（未获取到回复）'
-    }
+    // 补全AI消息生成完成时间
+    aiMsg.gen_finished = new Date().toISOString()
+    // 保存AI消息到后端
+    await saveChatMessage(aiMsg)
   } catch (e) {
-    if (e.name !== 'AbortError') { // 排除主动中断的情况
-      ElMessage.error('请求失败：' + e.message)
-      // 标记错误回复
-      const lastMsg = msgs.value[msgs.value.length - 1]
-      if (lastMsg.role === 'ai') {
-        lastMsg.content = '⚠️ ' + e.message
-      }
-    }
+    ElMessage.error('发送失败')
   } finally {
     loading.value = false
-    generating.value = false
+    scrollToBottom()
   }
 }
 
-// 打断生成
-function stopGenerate() {
-  if (abortController) {
-    abortController.abort()
-    ElMessage.info('已中断回复生成')
-  }
-  generating.value = false
-  loading.value = false
+// 新增：保存单条消息到后端
+async function saveChatMessage(message) {
+  await fetch('/api/chat-record/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      roleName: currentRole.value.name,
+      userName: currentUser.value.name,
+      message
+    }),
+  })
 }
 
-onMounted(() => {
-  loadCurrentRole()
-  checkLlamaStatus()
-  statusTimer = setInterval(checkLlamaStatus, 5000)
+// 改造：构建Prompt（适配新消息结构）
+function buildPrompt() {
+  const r = currentRole.value
+  let prompt = `
+【角色】${r.name}
+性格：${r.personality}
+语气：${r.tone}
+场景：${r.scenario}
+`
+  messages.value.forEach(m => {
+    prompt += `${m.name}：${m.mes}\n`
+  })
+  prompt += `${r.name}：`
+  return prompt
+}
+
+// 改造：清空聊天记录
+async function clearChat() {
+  if (!confirm('清空？')) return
+  await fetch(`/api/chat/clear?roleName=${encodeURIComponent(currentRole.value.name)}&userName=${encodeURIComponent(currentUser.value.name)}`, {
+    method: 'POST'
+  })
+  messages.value = []
+  ElMessage.success('聊天记录已清空')
+}
+
+// 修复：格式化时间显示（适配ISOString）
+function formatTime(isoString) {
+  if (!isoString) return ''
+  return new Date(isoString).toLocaleTimeString('zh-CN', { 
+    hour: '2-digit', 
+    minute: '2-digit',
+    hour12: false 
+  })
+}
+
+// 新增：处理消息内容换行（将\n转为<br>）
+function formatContent(content) {
+  if (!content) return ''
+  return content.replace(/\n/g, '<br>')
+}
+
+function scrollToBottom() {
+  nextTick(() => {
+    const el = msgList.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+function openUserSwitch() {
+  showUserDialog.value = true
+}
+
+onMounted(async () => {
+  await loadUsers()
+  const cr = localStorage.getItem('currentRole')
+  if (cr) currentRole.value = JSON.parse(cr)
+  await loadChat()
 })
 
-onUnmounted(() => {
-  clearInterval(statusTimer)
-  if (abortController) abortController.abort()
+watch(() => currentRole.value, async () => {
+  await loadChat()
 })
 
-window.addEventListener('role-changed', () => {
-  loadCurrentRole()
+watch(() => currentUser.value, async () => {
+  await loadChat()
+})
+
+window.addEventListener('role-changed', async () => {
+  const cr = localStorage.getItem('currentRole')
+  if (cr) currentRole.value = JSON.parse(cr)
+  await loadChat()
 })
 </script>
 
 <style scoped>
-.chat-wrapper {
+/* 修复：头像图片样式 */
+.avatar-img {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.chat-page {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding: 16px;
-  max-width: 900px;
-  margin: 0 auto;
+  background: #f0f2f5;
 }
 .chat-header {
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 10px;
-  gap: 10px;
-  flex-wrap: wrap;
 }
-.chat-box {
+.chat-header .title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 500;
+}
+.message-list {
   flex: 1;
-  background: #f9fafb;
-  border-radius: 12px;
   padding: 16px;
   overflow-y: auto;
 }
-.msg {
+.msg-item {
   display: flex;
-  flex-direction: column;
   margin-bottom: 12px;
-}
-.msg.user {
   align-items: flex-end;
 }
-.msg.ai {
-  align-items: flex-start;
+.msg-item.user {
+  flex-direction: row-reverse;
 }
-.bubble {
-  max-width: 70%;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: #fff;
-  border: 1px solid #eee;
-  word-break: break-word;
-}
-.user .bubble {
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   background: #409eff;
   color: #fff;
-  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  margin: 0 8px;
+  flex-shrink: 0;
+  overflow: hidden; /* 新增：防止头像溢出 */
+}
+.bubble {
+  max-width: 65%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  position: relative;
+}
+.msg-item.user .bubble {
+  background: #95ec69;
+}
+.bubble .name {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+.bubble .content {
+  white-space: pre-wrap; /* 新增：保留换行和空格 */
+  word-break: break-all; /* 新增：防止长文本溢出 */
+}
+.bubble .time {
+  font-size: 11px;
+  color: #999;
+  text-align: right;
+  margin-top: 4px;
+}
+.chat-input-bar {
+  padding: 12px;
+  background: #fff;
+  border-top: 1px solid #eee;
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.chat-input-bar .el-input {
+  flex: 1;
 }
 .loading {
+  text-align: center;
   color: #999;
+  padding: 8px;
   font-size: 12px;
-  padding: 10px;
-}
-.chat-input {
-  margin-top: 12px;
-}
-.msg-img {
-  width: 200px;
-  height: auto;
-  border-radius: 8px;
-  margin-top: 8px;
-  border: 1px solid #eee;
 }
 </style>

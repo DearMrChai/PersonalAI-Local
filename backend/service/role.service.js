@@ -1,35 +1,42 @@
 import path from 'path'
 import { readFile, writeFile } from '../utils/fileUtil.js'
 
-// 角色文件路径
 const ROLE_FILE = path.join(__dirname, '../config/roles.json')
 
-// 获取角色列表（自动创建空文件）
-export const getRoles = () => {
-  const roles = readFile(ROLE_FILE, [])
-  // 兼容原roles.json的格式错误（自动过滤非对象数据）
-  return roles.filter(role => typeof role === 'object' && role !== null && role.name)
+// 默认值全部按你要求
+const DEFAULT_ROLE = {
+  name: '',
+  personality: '',
+  tone: '',
+  opening: '',
+  description: '',
+  scenario: '日常聊天',
+  mesExample: '',
+  talkativeness: 0.5,
+  depthPrompt: '不要OOC，严格扮演角色，不偏离人设',
+  systemPrompt: ''
 }
 
-// 保存角色列表
+export const getRoles = () => {
+  let list = readFile(ROLE_FILE, [])
+  if (!Array.isArray(list)) list = []
+  return list.map(item => ({ ...DEFAULT_ROLE, ...item }))
+}
+
 export const saveRoles = (list) => {
   return writeFile(ROLE_FILE, list)
 }
 
-// 新增/更新角色
 export const upsertRole = (role) => {
-  const roles = getRoles()
-  const index = roles.findIndex(r => r.name === role.name)
-  if (index >= 0) {
-    roles[index] = role
-  } else {
-    roles.push(role)
-  }
-  return saveRoles(roles)
+  const list = getRoles()
+  const data = { ...DEFAULT_ROLE, ...role }
+  const idx = list.findIndex(x => x.name === data.name)
+  if (idx >= 0) list[idx] = data
+  else list.push(data)
+  return saveRoles(list)
 }
 
-// 删除角色
 export const deleteRole = (name) => {
-  const roles = getRoles().filter(r => r.name !== name)
-  return saveRoles(roles)
+  const list = getRoles().filter(x => x.name !== name)
+  return saveRoles(list)
 }
