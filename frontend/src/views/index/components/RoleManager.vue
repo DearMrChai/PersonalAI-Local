@@ -11,27 +11,27 @@
         v-for="role in roles"
         :key="role.name"
         :class="{ active: isCurrent(role) }"
+        @click="useRole(role)"
       >
-        <!-- 头像占位区（未来可扩展） -->
         <div class="avatar">{{ role.name.charAt(0) }}</div>
-
+      
         <div class="info">
           <div class="name">{{ role.name }}</div>
           <div class="desc">{{ role.personality || "未设置" }}</div>
         </div>
 
-        <div class="btns">
-          <el-button size="small" type="primary" @click="useRole(role)">
-            使用
-          </el-button>
+        <div class="btns" @click.stop>
           <el-button size="small" type="success" @click="openEdit(role)">
-            编辑
+        编辑
+          </el-button>
+          <!-- 新增删除按钮 -->
+          <el-button size="small" type="danger" @click="del(role.name)">
+        删除
           </el-button>
         </div>
       </div>
     </div>
 
-    <!-- 全局编辑弹窗（全屏居中，不受窄面板限制） -->
     <el-dialog
       v-model="showDialog"
       title="编辑角色"
@@ -52,19 +52,19 @@
               <el-input v-model="form.tone" placeholder="简短、可爱、高冷" />
             </el-form-item>
             <el-form-item label="开场白">
-              <el-input v-model="form.opening" type="textarea" rows="2" />
+              <el-input v-model="form.opening" type="textarea" :rows="2" />
             </el-form-item>
           </el-collapse-item>
 
           <el-collapse-item title="角色设定（选填）" name="extra">
             <el-form-item label="角色描述">
-              <el-input v-model="form.description" type="textarea" rows="2" />
+              <el-input v-model="form.description" type="textarea" :rows="2" />
             </el-form-item>
             <el-form-item label="对话场景">
               <el-input v-model="form.scenario" />
             </el-form-item>
             <el-form-item label="对话示例">
-              <el-input v-model="form.mesExample" type="textarea" rows="3" placeholder="不填自动生成" />
+              <el-input v-model="form.mesExample" type="textarea" :rows="3" placeholder="不填自动生成" />
             </el-form-item>
           </el-collapse-item>
 
@@ -73,7 +73,7 @@
               <el-slider v-model.number="form.talkativeness" :min="0" :max="1" :step="0.1" />
             </el-form-item>
             <el-form-item label="深度提示词">
-              <el-input v-model="form.depthPrompt" type="textarea" rows="2" />
+              <el-input v-model="form.depthPrompt" type="textarea" :rows="2" />
             </el-form-item>
           </el-collapse-item>
         </el-collapse>
@@ -88,12 +88,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, triggerRef } from 'vue'
 import { ElMessage } from 'element-plus'
 
 const roles = ref([])
 const showDialog = ref(false)
 const activeCollapse = ref(['base'])
+// 新增：响应式追踪当前选中角色名
+const currentRoleName = ref('')
 
 const form = ref({
   name: '',
@@ -107,7 +109,26 @@ const form = ref({
   depthPrompt: '不要OOC，严格扮演角色，不偏离人设',
 })
 
-onMounted(load)
+// 同步localStorage中的选中角色到响应式变量
+function syncCurrentRole() {
+  const curr = localStorage.getItem('currentRole')
+  if (!curr) {
+    currentRoleName.value = ''
+    return
+  }
+  try {
+    const currentRole = JSON.parse(curr)
+    currentRoleName.value = currentRole?.name || ''
+  } catch (e) {
+    localStorage.removeItem('currentRole')
+    currentRoleName.value = ''
+  }
+}
+
+onMounted(() => {
+  load()
+  syncCurrentRole() // 初始化同步选中状态
+})
 
 async function load() {
   const res = await fetch('/api/roles')
@@ -135,6 +156,20 @@ function openEdit(row = null) {
 
 async function save() {
   if (!form.value.name) return ElMessage.warning('角色名必填')
+  
+  // 编辑当前选中角色时，同步更新localStorage
+  const curr = localStorage.getItem('currentRole')
+  if (curr) {
+    try {
+      const currentRole = JSON.parse(curr)
+      if (currentRole.name === form.value.name && form.value.name !== form.value.name) {
+        currentRole.name = form.value.name
+        localStorage.setItem('currentRole', JSON.stringify(currentRole))
+        currentRoleName.value = form.value.name
+      }
+    } catch (e) {}
+  }
+
   await fetch('/api/roles', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -145,22 +180,38 @@ async function save() {
   ElMessage.success('保存成功')
 }
 
+// 删除功能（对接你的后端）
 async function del(name) {
-  if (!confirm('确定删除？')) return
+  if (!confirm('确定删除该角色？')) return
+  
+  // 删除当前选中角色时，清空选中状态
+  const curr = localStorage.getItem('currentRole')
+  if (curr) {
+    try {
+      const currentRole = JSON.parse(curr)
+      if (currentRole.name === name) {
+        localStorage.removeItem('currentRole')
+        currentRoleName.value = ''
+      }
+    } catch (e) {}
+  }
+
   await fetch(`/api/roles/${name}`, { method: 'DELETE' })
+  ElMessage.success('删除成功')
   load()
 }
 
+// 使用角色
 function useRole(role) {
   localStorage.setItem('currentRole', JSON.stringify(role))
+  currentRoleName.value = role.name // 更新响应式变量，触发高亮更新
   ElMessage.success('已选择：' + role.name)
   window.dispatchEvent(new Event('role-changed'))
 }
 
+// 判断是否当前选中（高亮用）
 function isCurrent(role) {
-  const curr = localStorage.getItem('currentRole')
-  if (!curr) return false
-  return JSON.parse(curr).name === role.name
+  return currentRoleName.value === role.name
 }
 </script>
 
@@ -205,6 +256,7 @@ function isCurrent(role) {
   background: #fff;
 }
 
+/* 选中高亮 */
 .role-item.active {
   border-color: #ff7d24;
   background: #fff9f5;
