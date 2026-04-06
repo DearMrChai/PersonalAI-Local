@@ -11,7 +11,10 @@ const MAX_CONTEXT_ROUNDS = 50
 
 // 生成聊天记录文件路径
 const getChatFilePath = (roleName, userName) => {
-  // 转义特殊字符，避免文件命名错误
+  // 新增：参数非空校验
+  if (!roleName || !userName) {
+    throw new Error('roleName和userName不能为空')
+  }
   const safeRoleName = roleName.replace(/[\\/:*?"<>|]/g, '_')
   const safeUserName = userName.replace(/[\\/:*?"<>|]/g, '_')
   return path.join(CHAT_HISTORY_DIR, `${safeRoleName}-${safeUserName}.json`)

@@ -22,7 +22,8 @@
       >
         <div class="avatar">
           <!-- 修复：头像显示逻辑（使用force_avatar构建图片） -->
-          <img :src="msg.force_avatar" alt="avatar" class="avatar-img" />
+          <!-- <img :src="msg.force_avatar" alt="avatar" class="avatar-img" /> -->
+           {{ msg.name.charAt(0) }}
         </div>
         <div class="bubble">
           <div class="name">{{ msg.name }}</div>
@@ -232,14 +233,38 @@ function buildPrompt() {
 // 改造：清空聊天记录
 async function clearChat() {
   if (!confirm("清空？")) return;
-  await fetch(
-    `/api/chat/clear?roleName=${encodeURIComponent(currentRole.value.name)}&userName=${encodeURIComponent(currentUser.value.name)}`,
-    {
+  
+  try {
+    // 构造请求体参数
+    const postData = {
+      roleName: currentRole.value.name,
+      userName: currentUser.value.name
+    };
+
+    const response = await fetch('/api/chat-record/clear', {
       method: "POST",
-    },
-  );
-  messages.value = [];
-  ElMessage.success("聊天记录已清空");
+      headers: {
+        // 必须指定JSON格式，否则后端req.body解析不到参数
+        "Content-Type": "application/json",
+      },
+      // 将参数转为JSON字符串放入body
+      body: JSON.stringify(postData)
+    });
+
+    // 处理HTTP状态码异常
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.msg || `请求失败：${response.status}`);
+    }
+
+    // 清空前端本地消息列表
+    messages.value = [];
+    ElMessage.success("聊天记录已清空");
+  } catch (error) {
+    // 捕获所有异常并提示
+    console.error("清空聊天记录失败：", error);
+    ElMessage.error(`清空失败：${error.message}`);
+  }
 }
 
 // 修复：格式化时间显示（适配ISOString）
