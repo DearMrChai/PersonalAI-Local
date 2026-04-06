@@ -1,0 +1,37 @@
+{
+  "name": "PersonalAI-Local-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "PersonalAI-Local-backend": "server.js"
+  },
+  "pkg": {
+    "targets": [
+      "node20-win-x64"
+    ],
+    "assets": [
+      "config/**/*",
+      "workflows/**/*",
+      "../frontend/dist/**/*"
+    ],
+    "outputPath": "../release"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
+    "node-fetch": "^3.3.2",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": ""
+}

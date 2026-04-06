@@ -1,0 +1,89 @@
+{
+  "3": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "cyberrealistic_final.safetensors"
+    }
+  },
+  "4": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "epicrealism_naturalSinRC1VAE.safetensors"
+    }
+  },
+  "5": {
+    "class_type": "ModelMergeSimple",
+    "inputs": {
+      "model1": ["3", 0],
+      "model2": ["4", 0],
+      "ratio": 0.5
+    }
+  },
+  "6": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": ["5", 0],
+      "clip": ["3", 1],
+      "lora_name": "add-detail-xl.safetensors",
+      "strength_model": 1.0,
+      "strength_clip": 1.0
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["6", 1],
+      "text": "{{prompt}}" // 动态替换提示词，不用改JSON
+    }
+  },
+  "8": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "clip": ["6", 1],
+      "text": "低质量, low quality, 解剖结构错误, bad anatomy, 畸形, deformed, 模糊, blurry, 多余肢体, extra limbs, ugly, text, watermark, fused, distorted body, long neck, bad proportions, lowres, worst quality, cropped, bad hands, missing fingers, extra fingers, extra arms, extra legs, mutated hands, deformed, mutated, disfigured, fused fingers, malformed limbs"
+    }
+  },
+  "9": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 512,
+      "height": 768,
+      "batch_size": 1
+    }
+  },
+  "10": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": "{{seed}}", // 动态生成随机种子
+      "steps": 20,
+      "cfg": 8,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": ["6", 0],
+      "positive": ["7", 0],
+      "negative": ["8", 0],
+      "latent_image": ["9", 0]
+    }
+  },
+  "11": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "vaeFtMse840000EmaPruned_vaeFtMse840k.safetensors"
+    }
+  },
+  "12": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": ["10", 0],
+      "vae": ["11", 0]
+    }
+  },
+  "13": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["12", 0],
+      "filename_prefix": "ComfyUI"
+    }
+  }
+}
