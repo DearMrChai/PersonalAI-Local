@@ -14,9 +14,9 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import RoleManager from '../views/RoleManager.vue'
-import Chat from '../views/Chat.vue'
-import Draw from '../views/Draw.vue'
+import RoleManager from './components/RoleManager.vue'
+import Chat from './components/Chat.vue'
+import Draw from './components/Draw.vue'
 
 const currentRole = ref(null)
 

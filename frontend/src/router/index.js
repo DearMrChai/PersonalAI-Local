@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Setup from '../views/Step.vue'
-import Layout from '../components/Layout.vue'
+import Layout from '../views/index/Layout.vue'
 
 // 路由规则：首次进入跳配置页，配置后跳主布局
 const routes = [

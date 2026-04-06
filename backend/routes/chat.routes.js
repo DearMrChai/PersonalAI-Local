@@ -3,29 +3,18 @@ import { streamChat } from '../service/chat.service.js'
 const router = express.Router()
 
 // WebSocket连接处理（全局wss，在server.js中挂载）
-global.wss.on('connection', (ws) => {
-  let abortController = null
-  ws.on('message', async (data) => {
-    try {
-      const msg = JSON.parse(data)
-      // 打断生成
-      if (msg.type === 'stop') {
-        if (abortController) abortController.abort()
-        ws.send(JSON.stringify({ type: 'stopped' }))
-        return
-      }
-      // 聊天请求
-      const { prompt } = msg
-      abortController = new AbortController()
-      await streamChat(prompt, ws, abortController)
-    } catch (e) {
-      ws.send(JSON.stringify({ type: 'done' }))
-    }
-  })
-  // 关闭连接时打断
-  ws.on('close', () => {
-    if (abortController) abortController.abort()
+// 流式聊天接口
+router.post('/chat/stream', streamChat)
+
+// 服务状态检测接口
+router.get('/service-status', async (req, res) => {
+  const config = getConfig()
+  // 实际应检测端口是否可连接，这里简化示例
+  res.json({
+    code: 200,
+    data: { llama: config.port.llama ? true : false }
   })
 })
+
 
 export default router

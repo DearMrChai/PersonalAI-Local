@@ -186,7 +186,7 @@ const startAll = async () => {
 // 保存并跳转
 const saveAndGo = async () => {
   await save()
-  router.push('/main')
+  router.push('/home')
 }
 </script>
 
