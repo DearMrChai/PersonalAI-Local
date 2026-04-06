@@ -1,0 +1,20 @@
+{
+  "port": {
+    "backend": 3000,
+    "frontend": 5173,
+    "llama": 5001,
+    "comfy": 8188
+  },
+  "path": {
+    "llamaServer": "D:/NSWFAI/AI/llama-b8671-bin-win-cpu-x64/llama-server.exe",
+    "llamaModel": "D:/NSWFAI/AI/modles/Llama/Llama-3-8B-Instruct-GGUF-Q4_K_M.gguf",
+    "comfyStart": "D:/NSWFAI/AI/ComfyUI_Windows_portable/start.bat"
+  },
+  "llama": {
+    "context": 2048,
+    "gpuLayers": "0",
+    "temperature": 0.7,
+    "maxTokens": 80
+  },
+  "mongoUrl": ""
+}

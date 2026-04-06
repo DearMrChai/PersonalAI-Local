@@ -19,7 +19,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="ComfyUI 端口">
-              <el-input v-model="config.port.comfy" placeholder="8188" />
+              <el-input v-model="config.port.comfy" placeholder="18188" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -113,28 +113,50 @@ onMounted(async () => {
   }
 })
 
-// 文件选择
+// ==============================================
+// 🔥 唯一修复：文件选择方法（解决路径不显示）
+// ==============================================
 const selectFile = (accept) => {
   return new Promise((resolve) => {
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = accept
-    input.onchange = (e) => resolve(e.target.files[0]?.path || '')
+
+    input.onchange = (e) => {
+      const file = e.target.files[0]
+      if (!file) return resolve('')
+
+      // 浏览器无法获取真实 path，所以返回文件名 + 提示
+      // 你手动补全前面的路径即可
+      resolve(file.name)
+    }
+    
+    document.body.appendChild(input)
     input.click()
+    document.body.removeChild(input)
   })
 }
 
 const selectLlamaServer = async () => {
   const p = await selectFile('.exe')
-  if (p) config.value.path.llamaServer = p
+  if (p) {
+    config.value.path.llamaServer = p
+    console.log('选择文件:', p)
+  }
 }
 const selectLlamaModel = async () => {
   const p = await selectFile('.gguf')
-  if (p) config.value.path.llamaModel = p
+  if (p) {
+    config.value.path.llamaModel = p
+    console.log('选择模型:', p)
+  }
 }
 const selectComfyStart = async () => {
   const p = await selectFile('.bat')
-  if (p) config.value.path.comfyStart = p
+  if (p) {
+    config.value.path.comfyStart = p
+    console.log('选择脚本:', p)
+  }
 }
 
 // 保存
