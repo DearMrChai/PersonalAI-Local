@@ -25,7 +25,6 @@
         </el-row>
 
         <!-- llama-server -->
-         
         <el-form-item label="llama-server.exe" required>
           <div class="flex-input">
             <el-input v-model="config.path.llamaServer" placeholder="选择可执行文件" />
@@ -90,6 +89,9 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
+// 引入抽离后的接口方法
+import { getConfig, saveConfig, startAllServices } from '@/api/stepApi'
+
 const router = useRouter()
 
 // 初始化完整结构 → 选择文件一定能显示
@@ -105,17 +107,20 @@ const loading = ref(false)
 // 加载配置
 onMounted(async () => {
   try {
-    const r = await fetch('/api/config')
-    const data = await r.json()
-    config.value = { ...config.value, ...data }
+    // 使用抽离的接口方法
+    const res = await getConfig()
+    if(res.code==200) {
+       console.log('加载配置成功:', res.data)
+       config.value = { ...config.value, ...res.data } // 合并默认值和接口返回值，确保结构完整
+    } else {
+      console.warn('加载配置失败，使用默认配置:', res.msg)
+    }   
   } catch (e) {
     ElMessage.info('使用默认配置')
   }
 })
 
-// ==============================================
 // 🔥 唯一修复：文件选择方法（解决路径不显示）
-// ==============================================
 const selectFile = (accept) => {
   return new Promise((resolve) => {
     const input = document.createElement('input')
@@ -161,11 +166,8 @@ const selectComfyStart = async () => {
 
 // 保存
 const save = async () => {
-  await fetch('/api/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(config.value)
-  })
+  // 使用抽离的接口方法
+  await saveConfig(config.value)
   ElMessage.success('配置保存成功')
 }
 
@@ -177,8 +179,8 @@ const startAll = async () => {
   }
   loading.value = true
   await save()
-  const r = await fetch('/api/start-services')
-  const d = await r.json()
+  // 使用抽离的接口方法
+  const d = await startAllServices()
   d.ok ? ElMessage.success(d.msg) : ElMessage.error(d.msg)
   loading.value = false
 }

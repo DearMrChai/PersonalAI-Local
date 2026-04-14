@@ -3,6 +3,7 @@
   "type": "module",
   "dependencies": {
     "@element-plus/icons-vue": "^2.1.0",
+    "axios": "^1.15.0",
     "element-plus": "^2.4.2",
     "vue": "^3.5.32",
     "vue-router": "^4.6.4"
