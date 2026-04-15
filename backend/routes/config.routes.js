@@ -22,7 +22,6 @@ router.post('/config', (req, res) => {
     if (!req.body || typeof req.body !== 'object') {
       return res.json(createResponse.clientError('配置参数格式错误'))
     }
-
     const ok = saveConfig(req.body)
     if (ok) {
       res.json(createResponse.success(null, '配置保存成功'))
