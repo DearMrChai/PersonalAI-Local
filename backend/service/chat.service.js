@@ -9,6 +9,11 @@ const cleanText = (text) => {
 }
 
 export const streamChat = async (req, res) => {
+
+  // console.log('收到聊天请求：', req.body) 
+
+  // return 
+
   try {
     const config = getConfig()
     const llamaUrl = `http://localhost:${config.port.llama}/v1/completions`

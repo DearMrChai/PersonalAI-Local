@@ -90,6 +90,8 @@
 <script setup>
 import { ref, onMounted, triggerRef } from 'vue'
 import { ElMessage } from 'element-plus'
+// 引入抽离后的接口方法
+import { getRoles,saveRoles,deleteRoles } from "@/api/roleManageApi";
 
 const roles = ref([])
 const showDialog = ref(false)
@@ -131,8 +133,9 @@ onMounted(() => {
 })
 
 async function load() {
-  const res = await fetch('/api/roles')
-  roles.value = await res.json()
+  const res = await getRoles()
+
+  roles.value = res.data
 }
 
 function openEdit(row = null) {
@@ -170,11 +173,9 @@ async function save() {
     } catch (e) {}
   }
 
-  await fetch('/api/roles', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(form.value),
-  })
+  console.log('保存角色数据：', form.value)
+
+  await saveRoles(form.value)
   showDialog.value = false
   load()
   ElMessage.success('保存成功')
@@ -196,7 +197,7 @@ async function del(name) {
     } catch (e) {}
   }
 
-  await fetch(`/api/roles/${name}`, { method: 'DELETE' })
+  await deleteRoles(name)
   ElMessage.success('删除成功')
   load()
 }

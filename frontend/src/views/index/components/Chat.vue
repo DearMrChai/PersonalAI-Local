@@ -23,7 +23,7 @@
         <div class="avatar">
           <!-- 修复：头像显示逻辑（使用force_avatar构建图片） -->
           <!-- <img :src="msg.force_avatar" alt="avatar" class="avatar-img" /> -->
-           {{ msg.name.charAt(0) }}
+          {{ msg.name.charAt(0) }}
         </div>
         <div class="bubble">
           <div class="name">{{ msg.name }}</div>
@@ -68,6 +68,8 @@
 <script setup>
 import { ref, onMounted, watch, nextTick } from "vue";
 import { ElMessage } from "element-plus";
+// 引入抽离后的接口方法
+import { getUsers } from "@/api/chatApi";
 
 const currentRole = ref({});
 const currentUser = ref({
@@ -85,10 +87,17 @@ const msgList = ref(null);
 
 // 加载用户列表（新增user.service接口）
 async function loadUsers() {
-  const r = await fetch("/api/getUsers");
-  users.value = await r.json();
-  const cu = localStorage.getItem("currentUser");
-  if (cu) currentUser.value = JSON.parse(cu);
+  try {
+    const res = await getUsers();
+    if (res.code === 200) {
+      users.value = res.data;
+      const cu = localStorage.getItem("currentUser");
+      if (cu) currentUser.value = JSON.parse(cu);
+    }
+  } catch (error) {
+    console.error("加载用户列表失败：", error);
+    ElMessage.error("加载用户列表失败");
+  }
 }
 
 function saveCurrentUser() {
@@ -111,7 +120,7 @@ async function loadChat() {
       .map((item) => item.message) // 提取message字段
       .filter(Boolean) || []; // 确保过滤空值
 
-    // console.log("加载聊天记录：", messages.value);
+  // console.log("加载聊天记录：", messages.value);
   scrollToBottom();
 }
 // 改造：发送消息（适配新结构）
@@ -175,21 +184,21 @@ async function send() {
     scrollToBottom();
 
     // 前端Chat.vue中send方法的流式处理部分（已有逻辑可保留，后端过滤后无需修改）
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  const chunk = decoder.decode(value);
-  const lines = chunk.split("\n").filter((i) => i.trim());
-  for (const line of lines) {
-    if (!line.startsWith("data: ")) continue;
-    const json = line.slice(6);
-    if (json === "[DONE]") continue;
-    const data = JSON.parse(json);
-    const t = data.choices?.[0]?.text || "";
-    aiMsg.mes += t; // 后端已过滤换行，直接拼接即可
-    scrollToBottom();
-  }
-}
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value);
+      const lines = chunk.split("\n").filter((i) => i.trim());
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const json = line.slice(6);
+        if (json === "[DONE]") continue;
+        const data = JSON.parse(json);
+        const t = data.choices?.[0]?.text || "";
+        aiMsg.mes += t; // 后端已过滤换行，直接拼接即可
+        scrollToBottom();
+      }
+    }
     // 补全AI消息生成完成时间
     aiMsg.gen_finished = new Date().toISOString();
     // 保存AI消息到后端
@@ -234,22 +243,22 @@ function buildPrompt() {
 // 改造：清空聊天记录
 async function clearChat() {
   if (!confirm("清空？")) return;
-  
+
   try {
     // 构造请求体参数
     const postData = {
       roleName: currentRole.value.name,
-      userName: currentUser.value.name
+      userName: currentUser.value.name,
     };
 
-    const response = await fetch('/api/chat-record/clear', {
+    const response = await fetch("/api/chat-record/clear", {
       method: "POST",
       headers: {
         // 必须指定JSON格式，否则后端req.body解析不到参数
         "Content-Type": "application/json",
       },
       // 将参数转为JSON字符串放入body
-      body: JSON.stringify(postData)
+      body: JSON.stringify(postData),
     });
 
     // 处理HTTP状态码异常

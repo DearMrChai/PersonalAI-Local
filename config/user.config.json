@@ -2,7 +2,7 @@
   "port": {
     "backend": 3000,
     "frontend": 5173,
-    "llama": 5001,
+    "llama": "8080",
     "comfy": 8188
   },
   "path": {
