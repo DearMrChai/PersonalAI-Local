@@ -69,7 +69,7 @@
 import { ref, onMounted, watch, nextTick } from "vue";
 import { ElMessage } from "element-plus";
 // 引入抽离后的接口方法
-import { getUsers } from "@/api/chatApi";
+import { getUsers, chatStream } from "@/api/chatApi";
 
 const currentRole = ref({});
 const currentUser = ref({
