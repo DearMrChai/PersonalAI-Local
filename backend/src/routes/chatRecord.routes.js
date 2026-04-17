@@ -1,5 +1,5 @@
 import express from 'express'
-import { loadChatRecord, saveChatRecord, clearChatRecord } from '../service/chatRecord.service.js'
+import { loadChatRecord, saveChatRecord, clearChatRecord } from '../services/chatRecord.service.js'
 
 const router = express.Router()
 

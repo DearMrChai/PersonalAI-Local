@@ -7,19 +7,14 @@ import {
   createCharacter,
   updateCharacter,
   deleteCharacter
-} from '../service/character.service.js';
+} from '../services/character.service.js';
+
+import { getAllCharactersController } from '../controllers/character.controllers.js';
 
 const router = express.Router()
 
 // 1. GET 获取全部角色列表
-router.get('/getAllCharacters', async (req, res) => {
-  try {
-    const list = await getAllCharacters();
-    res.json(createResponse.success(list, '获取角色列表成功'));
-  } catch (err) {
-    res.json(createResponse.error(err.message));
-  }
-});
+router.get('/getAllCharacters', getAllCharactersController);
 
 // 2. GET 获取单个角色详情
 router.get('/getCharacterDetail', async (req, res) => {
@@ -49,8 +44,11 @@ router.post('/updateCharacter', async (req, res) => {
   const body = req.body;
   try {
     await updateCharacter(body);
+    console.log('更新角色成功');
+
     res.json(createResponse.success({}, '更新角色成功'));
   } catch (err) {
+    console.error('更新角色错误：', err);
     res.json(createResponse.error(err.message));
   }
 });

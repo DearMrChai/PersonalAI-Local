@@ -1,8 +1,8 @@
 import path from 'path'
-import defaultConfig from '../config/default.config.js'
+import defaultConfig from '../../config/default.config.js'
 import { readFile, writeFile } from '../utils/fileUtil.js'
 // 用户配置文件路径（统一管理，无重复）
-const USER_CONFIG_PATH = path.join(__dirname, '../config/user.config.json')
+const USER_CONFIG_PATH = path.join(__dirname, '../../config/user.config.json')
 
 /**
  * 获取最终配置（默认配置 + 用户配置覆盖）

@@ -3,7 +3,7 @@ import {
   startAllServices,
   stopAllServices,
   getServiceStatus
-} from '../service/process.service.js'
+} from '../services/process.service.js'
 
 const router = express.Router()
 

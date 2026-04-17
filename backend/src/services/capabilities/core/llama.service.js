@@ -1,7 +1,7 @@
 import { LlamaModel, LlamaContext, LlamaChatSession, getLlama } from 'node-llama-cpp';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { getConfig } from './config.service.js';
+// import { getConfig } from '../../config.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -13,7 +13,7 @@ let contextInstance;
 export const initLlamaModel = async () => {
   if (modelInstance) return modelInstance;
 
-  const config = getConfig();
+  // const config = getConfig();
   llamaInstance = await getLlama();
 
   modelInstance = await llamaInstance.loadModel({

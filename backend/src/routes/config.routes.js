@@ -1,5 +1,5 @@
 import express from 'express'
-import { getConfig, saveConfig } from '../service/config.service.js'
+import { getConfig, saveConfig } from '../services/config.service.js'
 import createResponse from '../utils/responseUtil.js'
 
 const router = express.Router()

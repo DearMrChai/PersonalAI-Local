@@ -1,5 +1,5 @@
 import express from 'express'
-import { getUsers, upsertUser } from '../service/user.service.js'
+import { getUsers, upsertUser } from '../services/user.service.js'
 import createResponse from '../utils/responseUtil.js'
 
 const router = express.Router()

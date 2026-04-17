@@ -34,15 +34,22 @@ if (fs.existsSync(frontDistPath)) {
 }
 
 // 自动注册路由
-const routesDir = path.join(__dirname, 'routes')
+const routesDir = path.join(__dirname, '/src/routes')
+console.log(`🔍 正在加载路由...`)
+// console.log(`📂 路由目录：${routesDir}` )
 fs.readdirSync(routesDir).forEach(file => {
+  // console.log(`📄 发现路由文件：${file}`)
   if (file.endsWith('.routes.js')) {
-    const router = import(`./routes/${file}`)
+    const router = import(`./src/routes/${file}`)
     router.then(mod => {
       app.use('/api', mod.default)
     })
   }
 })
+
+// const dbPath = path.resolve(__dirname, '../database/personal_ai.db'); // 建议改个更清晰的名字
+
+
 
 // 启动服务
 const PORT = 3000

@@ -1,7 +1,7 @@
 import fetch from 'node-fetch'
 import { getConfig } from './config.service.js'
 import { saveChatRecord } from './chatRecord.service.js'
-import { createLlamaChatSession, streamLlamaResponse, buildModelPrompt } from './llama.service.js';
+import { createLlamaChatSession, streamLlamaResponse, buildModelPrompt } from '../services/capabilities/core/llama.service.js';
 
 // 过滤多余换行
 const cleanText = (text) => {

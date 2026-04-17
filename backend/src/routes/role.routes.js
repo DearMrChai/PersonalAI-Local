@@ -1,5 +1,5 @@
 import express from 'express'
-import { getRoles, upsertRole, deleteRole } from '../service/role.service.js'
+import { getRoles, upsertRole, deleteRole } from '../services/role.service.js'
 import createResponse from '../utils/responseUtil.js'
 
 const router = express.Router()

@@ -1,8 +1,8 @@
 import fs from 'fs'
 import path from 'path'
 import fetch from 'node-fetch'
-import { getConfig } from './config.service.js'
-import { readFile } from '../utils/fileUtil.js'
+import { getConfig } from '../../config.service.js'
+import { readFile } from '../../../utils/fileUtil.js'
 
 // 获取绘图工作流（可扩展，支持切换不同工作流）
 const getWorkflow = (workflowName = 'character-draw') => {

@@ -1,5 +1,5 @@
 import express from 'express'
-import { generateImage, getDrawTask, getDrawProgress } from '../service/draw.service.js'
+import { generateImage, getDrawTask, getDrawProgress } from '../services/capabilities/images/draw.service.js'
 const router = express.Router()
 
 // 生成图片

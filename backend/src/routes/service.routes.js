@@ -1,5 +1,5 @@
 import express from 'express'
-import { startAllServices, getServiceStatus, stopAllServices } from '../service/process.service.js'
+import { startAllServices, getServiceStatus, stopAllServices } from '../services/process.service.js'
 const router = express.Router()
 
 // 一键启动所有服务（llama+ComfyUI）
