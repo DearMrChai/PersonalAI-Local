@@ -106,18 +106,20 @@ const loading = ref(false)
 
 // 加载配置
 onMounted(async () => {
-  try {
-    // 使用抽离的接口方法
-    const res = await getConfig()
-    if(res.code==200) {
-       console.log('加载配置成功:', res.data)
-       config.value = { ...config.value, ...res.data } // 合并默认值和接口返回值，确保结构完整
-    } else {
-      console.warn('加载配置失败，使用默认配置:', res.msg)
-    }   
-  } catch (e) {
-    ElMessage.info('使用默认配置')
-  }
+  router.push('/home')
+
+  // try {
+  //   // 使用抽离的接口方法
+  //   const res = await getConfig()
+  //   if(res.code==200) {
+  //      console.log('加载配置成功:', res.data)
+  //      config.value = { ...config.value, ...res.data } // 合并默认值和接口返回值，确保结构完整
+  //   } else {
+  //     console.warn('加载配置失败，使用默认配置:', res.msg)
+  //   }   
+  // } catch (e) {
+  //   ElMessage.info('使用默认配置')
+  // }
 })
 
 // 🔥 唯一修复：文件选择方法（解决路径不显示）

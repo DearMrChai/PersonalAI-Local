@@ -8,18 +8,41 @@
         <Chat />
       </div>
 
-      <!-- 右侧：角色管理面板（可收起，高级美观） -->
+      <!-- 右侧：多功能面板（可收起） -->
       <div class="role-sidebar" :class="{ show: showRoleSidebar }">
+        <!-- 开关按钮 -->
         <button class="toggle-btn" @click="showRoleSidebar = !showRoleSidebar">
           <span v-if="showRoleSidebar">›</span>
           <span v-else>‹</span>
         </button>
-        <div class="role-content">
-          <RoleManager @role-selected="onRoleSelected" />
+
+        <!-- 面板内容区 -->
+        <div class="panel-container">
+          <!-- 顶部 Tab 切换 -->
+          <div class="panel-tabs">
+            <button 
+              :class="{ active: currentTab === 'role' }" 
+              @click="currentTab = 'role'"
+            >
+              角色管理
+            </button>
+            <button 
+              :class="{ active: currentTab === 'tag' }" 
+              @click="currentTab = 'tag'"
+            >
+              标签管理
+            </button>
+          </div>
+
+          <!-- 内容区域：根据 Tab 显示不同组件 -->
+          <div class="panel-content">
+            <RoleManager v-if="currentTab === 'role'" @role-selected="onRoleSelected" />
+            <TagManager v-if="currentTab === 'tag'" />
+          </div>
         </div>
       </div>
 
-      <!-- 绘图面板：默认隐藏，需要再开 -->
+      <!-- 绘图面板：默认隐藏 -->
       <div class="draw-modal" v-if="showDraw">
         <div class="draw-body">
           <button class="close-draw" @click="showDraw = false">关闭</button>
@@ -36,15 +59,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import RoleManager from './components/RoleManager.vue'
+import TagManager from './components/TagManager.vue' // 引入新组件
 import Chat from './components/Chat.vue'
 import Draw from './components/Draw.vue'
 
 const currentRole = ref(null)
-
-// 角色面板默认展开
 const showRoleSidebar = ref(true)
-// 绘图面板默认关闭
 const showDraw = ref(false)
+
+// 新增：当前面板 Tab 状态 ('role' | 'tag')
+const currentTab = ref('role')
 
 onMounted(() => {
   const stored = localStorage.getItem('currentRole')
@@ -72,14 +96,10 @@ html, body {
   overflow: hidden;
 }
 
-/* 全局背景（你以后可以换成图片） */
 .app-background {
   width: 100vw;
   min-height: 100vh;
   background: #f0f2f5;
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -96,7 +116,7 @@ html, body {
 }
 
 /* ============================
-   中间聊天窗口（固定美观）
+   中间聊天窗口
 ============================ */
 .chat-wrap {
   width: 700px;
@@ -109,27 +129,27 @@ html, body {
 }
 
 /* ============================
-   右侧角色栏 —— 高级美观版
+   右侧多功能面板
 ============================ */
 .role-sidebar {
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 350px;
+  width: 880px; /* 稍微加宽一点，方便看标签 */
   height: calc(100vh - 40px);
   background: #ffffff;
   border-radius: 16px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   transition: all 0.3s ease;
   z-index: 100;
+  display: flex;
+  flex-direction: column;
 }
 
-/* 收起状态（滑到屏幕外） */
 .role-sidebar:not(.show) {
   transform: translateX(calc(100% + 20px));
 }
 
-/* 开关按钮（圆形箭头按钮，完美修复） */
 .toggle-btn {
   position: absolute;
   left: -18px;
@@ -151,16 +171,56 @@ html, body {
   z-index: 101;
 }
 
-/* 角色栏内容区域 */
-.role-content {
-  width: 100%;
+/* 新增：面板内部布局 */
+.panel-container {
+  display: flex;
+  flex-direction: column;
   height: 100%;
-  overflow-y: auto;
+  width: 100%;
+}
+
+/* 新增：Tab 样式 */
+.panel-tabs {
+  display: flex;
+  border-bottom: 1px solid #eee;
+  padding: 0 10px;
+  background: #fafafa;
+  border-radius: 16px 16px 0 0;
+}
+
+.panel-tabs button {
+  flex: 1;
   padding: 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+  border-bottom: 2px solid transparent;
+}
+
+.panel-tabs button:hover {
+  color: #FF7D24;
+  background: #f0f0f0;
+}
+
+.panel-tabs button.active {
+  color: #FF7D24;
+  border-bottom-color: #FF7D24;
+  background: #fff;
+}
+
+/* 新增：内容区域 */
+.panel-content {
+  flex: 1;
+  overflow: hidden; /* 让内部组件自己处理滚动 */
+  position: relative;
 }
 
 /* ============================
-   绘图按钮（美观悬浮）
+   绘图相关样式保持不变
 ============================ */
 .draw-toggle {
   position: fixed;
@@ -178,9 +238,6 @@ html, body {
   z-index: 999;
 }
 
-/* ============================
-   绘图弹窗
-============================ */
 .draw-modal {
   position: fixed;
   top: 0;

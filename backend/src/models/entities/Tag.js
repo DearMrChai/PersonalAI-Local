@@ -5,7 +5,7 @@ const createTable = () => {
     CREATE TABLE IF NOT EXISTS tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT UNIQUE NOT NULL,           -- 标签名称，如 "温柔"、"黑长直"
-      type TEXT DEFAULT 'general',         -- general / kink / personality
+      type TEXT DEFAULT 'general',         -- general / kink / personality 一般 / 奇癖 / 个性
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `;

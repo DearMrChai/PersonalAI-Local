@@ -1,12 +1,14 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import 'dotenv/config';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // 建议把数据库文件放在项目根目录的 database 文件夹里
-const dbPath = path.resolve(__dirname, '../../../database/personal_ai.db');
+// 使用 process.env.DB_PATH
+const dbPath = path.resolve(__dirname, process.env.DB_PATH || '../../../database/personal_ai.db');
 console.log(`🔍 正在连接SQLite数据库，路径：${dbPath}`);
 const sqlite = sqlite3.verbose();
 const db = new sqlite.Database(dbPath, (err) => {

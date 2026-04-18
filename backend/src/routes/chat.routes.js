@@ -1,5 +1,5 @@
 import express from 'express'
-import { streamChat,streamChatv2 } from '../services/chat.service.js'
+import {streamChatv2 } from '../services/chat.service.js'
 import createResponse from '../utils/responseUtil.js'
 
 
