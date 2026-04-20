@@ -1,228 +1,99 @@
-import fetch from 'node-fetch'
-// import { getConfig } from './config.service.js'
-import { saveChatRecord } from './chatRecord.service.js'
-import { createLlamaChatSession, streamLlamaResponse, buildModelPrompt } from '../services/capabilities/core/llama.service.js';
+import { getCharacterDetail } from './character.service.js';
+import { getLlmProvider } from './chat/llm/index.js';
+import { promptBuilder } from './chat/prompt/promptBuilder.js';
+import { saveChatRecord } from './chatRecord.service.js';
 
-// 过滤多余换行
-const cleanText = (text) => {
-  if (!text) return ''
-  return text.replace(/\n+/g, ' ').trim()
-}
-
-// 旧接口（保留但不使用）
-// export const streamChat = async (req, res) => {
-//   try {
-//     const config = getConfig()
-//     const llamaUrl = `http://localhost:${config.port.llama}/v1/completions`
-
-//     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
-//     res.setHeader('Cache-Control', 'no-cache')
-//     res.setHeader('Connection', 'keep-alive')
-//     res.setHeader('X-Accel-Buffering', 'no')
-//     res.setHeader('Access-Control-Allow-Origin', '*')
-
-//     const resp = await fetch(llamaUrl, {
-//       method: 'POST',
-//       headers: { 'Content-Type': 'application/json' },
-//       body: JSON.stringify({
-//         prompt: req.body.prompt,
-//         max_tokens: config.llama.maxTokens,
-//         temperature: config.llama.temperature,
-//         stream: true,
-//         stop: ["<|end_of_text|>", "用户", "你：", "【", "】"]
-//       })
-//     })
-
-//     if (!resp.ok) {
-//       throw new Error(`Llama错误 ${resp.status}`)
-//     }
-
-//     let buffer = ''
-//     resp.body.on('data', (chunk) => {
-//       buffer += chunk.toString('utf8')
-//       const lines = buffer.split('\n')
-//       buffer = lines.pop() || ''
-
-//       for (const line of lines) {
-//         if (!line.startsWith('data: ')) continue
-//         const dataStr = line.substring(6)
-//         if (dataStr === '[DONE]') {
-//           res.write(`data: [DONE]\n\n`)
-//           continue
-//         }
-
-//         try {
-//           const data = JSON.parse(dataStr)
-//           if (data.choices?.[0]) {
-//             data.choices[0].text = cleanText(data.choices[0].text)
-//             if (data.choices[0].text || data.choices[0].finish_reason) {
-//               res.write(`data: ${JSON.stringify(data)}\n\n`)
-//             }
-//           }
-//         } catch (e) {}
-//       }
-//     })
-
-//     resp.body.on('end', () => {
-//       res.write(`data: [DONE]\n\n`)
-//       res.end()
-//     })
-
-//     resp.body.on('error', (err) => {
-//       res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`)
-//       res.end()
-//     })
-
-//     req.on('close', () => {
-//       resp.body.destroy()
-//       res.end()
-//     })
-
-//   } catch (e) {
-//     console.error('代理错误：', e)
-//     res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`)
-//     res.end()
-//   }
-// }
-
-// 新版本接口（适配模型Prompt格式）
-export const streamChatv2 = async (req, res) => {
-  try {
-    const { prompt, roleName = '测试角色', userName = '用户' } = req.body;
-
-    if (!prompt) {
-      throw new Error("用户输入不能为空");
-    }
-    console.log("收到用户输入：", prompt);
-
-    // 1. 解析prompt中的角色设定（从请求参数中提取系统提示词）
-    // 示例：从prompt中提取【角色】【性格】【语气】【场景】等信息作为systemPrompt
-    const systemPrompt = extractSystemPrompt(prompt, roleName);
-
-
-    
-    console.log("构建的系统提示词：", systemPrompt);
-
-    // 2. 构建符合模型要求的完整Prompt
-    const modelPrompt = buildModelPrompt(
-      systemPrompt,
-      cleanText(prompt.replace(/【.*?】/g, '').trim()), // 提取纯用户输入
-      roleName,
-      userName
-    );
-
-    // 3. 创建会话（传入系统提示词）
-    const session = await createLlamaChatSession(systemPrompt);
-    console.log("会话创建成功，开始流式响应...");
-
-    // 4. 流式返回响应
-    await streamLlamaResponse(session, modelPrompt, res);
-
-    req.on('close', () => {
-      res.end();
-    });
-
-  } catch (e) {
-    console.error('streamChatv2 错误：', e);
-    res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
-    res.end();
+/**
+ * 核心业务逻辑：生成流式回复
+ * @param {Object} params 
+ * @param {string|number} params.characterId - 角色ID
+ * @param {string} params.message - 用户当前消息
+ * @param {Array} params.history - 历史对话记录 [{ role: 'user'|'assistant', content: string }]
+ * @param {string} params.userName - 用户名（用于存储记录）
+ * @returns {AsyncGenerator<string, void, undefined>} 返回文本块的异步生成器
+ */
+export async function* generateStreamResponse({ characterId, message, history = [], userName = '用户' }) {
+  if (!characterId || !message) {
+    throw new Error("缺少角色ID或用户消息");
   }
-};
 
-// 从prompt中提取角色设定作为systemPrompt
-const extractSystemPrompt = (prompt, roleName) => {
-  // 匹配【角色】【性格】【语气】【场景】等字段
-  const roleMatch = prompt.match(/【角色】(.*?)\n/);
-  const personalityMatch = prompt.match(/【性格】(.*?)\n/);
-  const toneMatch = prompt.match(/【语气】(.*?)\n/);
-  const sceneMatch = prompt.match(/【场景】(.*?)\n/);
+  console.log(`[ChatService] 开始处理请求: 角色ID=${characterId}`);
 
-  // 构建系统提示词
-  let systemPrompt = `你是${roleName || '测试角色'}，`;
-  if (personalityMatch) systemPrompt += `性格：${personalityMatch[1]}，`;
-  if (toneMatch) systemPrompt += `语气：${toneMatch[1]}，`;
-  if (sceneMatch) systemPrompt += `场景：${sceneMatch[1]}。`;
-  systemPrompt += `请按照设定与用户进行日常聊天。`;
-
-  return systemPrompt;
-};
-
-// 保存聊天记录（不变）
-export const saveChatMessage = async (req, res) => {
-  try {
-    const { roleName, userName, message } = req.body
-    const cleanMes = cleanText(message.mes || '')
-    
-    const chatMessage = {
-      name: message.name,
-      is_user: message.is_user,
-      is_system: false,
-      send_date: new Date().toISOString(),
-      mes: cleanMes,
-      extra: { isSmallSys: false },
-      force_avatar: message.force_avatar,
-      swipes: [],
-      swipe_id: 0,
-      gen_started: message.is_user ? null : new Date().toISOString(),
-      gen_finished: message.is_user ? null : new Date().toISOString()
-    }
-
-    const record = saveChatRecord(roleName, userName, chatMessage)
-    res.json({ success: true, record })
-  } catch (e) {
-    res.status(500).json({ success: false, error: e.message })
+  // 1. 获取角色详情 (为了拿到 roleName 和 avatar 等)
+  const character = await getCharacterDetail(characterId);
+  if (!character) {
+    throw new Error("角色不存在");
   }
+  
+  const roleName = character.name; // 关键：拿到角色名称用于保存文件
+
+  // 2. 构建 System Prompt
+  const systemPrompt = promptBuilder.buildSystemPrompt(character);
+
+  // 3. 组装 Messages
+  const messages = [
+    { role: "system", content: systemPrompt },
+    ...history, 
+    { role: "user", content: message }
+  ];
+
+  console.log(`[ChatService] Prompt 构建完成，消息数: ${messages.length}`);
+
+  // 4. 获取 LLM Provider
+  const llm = await getLlmProvider();
+
+  let fullResponse = '';
+
+  // 5. 调用 LLM 并 Yield 数据
+  try {
+    for await (const chunk of llm.streamGenerate(messages, {
+      temperature: 0.75,
+      maxTokens: 512,
+    })) {
+      fullResponse += chunk;
+      yield chunk; 
+    }
+  } catch (llmError) {
+    console.error('[ChatService] LLM 生成错误:', llmError);
+    throw new Error(`LLM 生成失败: ${llmError.message}`);
+  }
+
+  console.log(`[ChatService] 生成完成，总长度: ${fullResponse.length}`);
+
+  // 6. 【修复点】异步保存记录
+  // 因为 saveChatRecord 是同步函数，我们不能用 .catch()
+  // 我们把它包在一个 async 函数里，这样即使里面有同步错误，也不会崩溃主进程
+  (async () => {
+    try {
+      // 保存用户消息
+      saveChatRecord(roleName, userName, {
+        name: userName,
+        is_user: true,
+        mes: message,
+        send_date: new Date().toISOString(),
+        force_avatar: '', // 如果需要可以补充
+        extra: {},
+        swipes: [],
+        swipe_id: 0
+      });
+
+      // 保存 AI 消息
+      saveChatRecord(roleName, userName, {
+        name: roleName,
+        is_user: false,
+        mes: fullResponse,
+        send_date: new Date().toISOString(),
+        force_avatar: character.avatar || '', 
+        extra: {},
+        swipes: [],
+        swipe_id: 0,
+        gen_started: new Date().toISOString(),
+        gen_finished: new Date().toISOString()
+      });
+      
+      console.log('[ChatService] 聊天记录保存成功');
+    } catch (err) {
+      console.error('[ChatService] 保存聊天记录时发生同步错误:', err);
+    }
+  })(); // 立即执行这个异步闭包
 }
-
-
-
-// // 在 chat.service.js 顶部导入
-// import { getCharacterDetail } from './character.service.js';
-
-// // 示例：在 streamChatv2 中根据角色ID获取角色信息，替换硬编码的 roleName
-// export const streamChatv2 = async (req, res) => {
-//   try {
-//     const { prompt, characterId, userName = '用户' } = req.body;
-
-//     if (!prompt) {
-//       throw new Error("用户输入不能为空");
-//     }
-    
-//     // 从数据库获取角色信息（替代原来的硬编码 roleName）
-//     let roleName = '测试角色';
-//     let systemPrompt = '';
-//     if (characterId) {
-//       const character = await getCharacterDetail(characterId);
-//       roleName = character.name;
-//       // 用数据库中的角色属性构建系统提示词
-//       systemPrompt = `你是${character.name}，性格：${character.personality}，语气：${character.tone}，场景：${character.background_story}。请按照设定与用户进行日常聊天。`;
-//     } else {
-//       // 兼容原有逻辑
-//       systemPrompt = extractSystemPrompt(prompt, roleName);
-//     }
-
-//     console.log("构建的系统提示词：", systemPrompt);
-
-//     // 后续逻辑不变...
-//     const modelPrompt = buildModelPrompt(
-//       systemPrompt,
-//       cleanText(prompt.replace(/【.*?】/g, '').trim()),
-//       roleName,
-//       userName
-//     );
-
-//     const session = await createLlamaChatSession(systemPrompt);
-//     console.log("会话创建成功，开始流式响应...");
-
-//     await streamLlamaResponse(session, modelPrompt, res);
-
-//     req.on('close', () => {
-//       res.end();
-//     });
-
-//   } catch (e) {
-//     console.error('streamChatv2 错误：', e);
-//     res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
-//     res.end();
-//   }
-// };

@@ -15,6 +15,8 @@ const getChatFilePath = (roleName, userName) => {
   if (!roleName || !userName) {
     throw new Error('roleName和userName不能为空')
   }
+  console.log(`生成聊天记录文件路径: roleName=${roleName}, userName=${userName}`);
+  // 替换文件名中的非法字符，避免文件系统错误
   const safeRoleName = roleName.replace(/[\\/:*?"<>|]/g, '_')
   const safeUserName = userName.replace(/[\\/:*?"<>|]/g, '_')
   return path.join(CHAT_HISTORY_DIR, `${safeRoleName}-${safeUserName}.json`)

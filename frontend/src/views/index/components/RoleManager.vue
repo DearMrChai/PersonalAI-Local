@@ -177,6 +177,13 @@
                   <el-input v-model="form.dislikes" />
                 </el-form-item>
               </el-col>
+               <el-col :span="24">
+                <el-form-item label="性方面">
+                  <el-input v-model="form.sexual_personality"   type="textarea"
+                :rows="4"/>
+                </el-form-item>
+              </el-col>
+              
             </el-row>
             <el-form-item label="习惯">
               <el-input v-model="form.habits" />
@@ -273,17 +280,19 @@ async function loadData() {
   }
 }
 
+// src/views/index/components/RoleManager.vue
+
+// ... 其他代码 ...
+
 // 加载角色到右侧表单
 function loadRoleToForm(role) {
   currentEditId.value = role.id;
   
-  // 处理标签回显
+  // ... (原有的表单赋值逻辑保持不变) ...
   let tagIds = [];
   if (Array.isArray(role.tags)) {
     tagIds = role.tags.map(t => typeof t === 'object' ? t.id : t);
   }
-  
-  // 处理 Kinks 回显
   let kinksStr = "";
   if (Array.isArray(role.kinks)) kinksStr = role.kinks.join(',');
   else if (typeof role.kinks === 'string') kinksStr = role.kinks;
@@ -296,8 +305,14 @@ function loadRoleToForm(role) {
       ? role.example_dialogs.join('\n') 
       : (role.example_dialogs || ""),
   };
+
+  localStorage.setItem("currentRole", JSON.stringify(role));
+
+  // 【新增】触发全局事件，通知 Chat 组件角色已切换
+  window.dispatchEvent(new CustomEvent("role-changed", { detail: role }));
 }
 
+// ... 其他代码 ...
 // 新建模式
 function createNew() {
   currentEditId.value = null;
