@@ -11,7 +11,6 @@ import chatController from '../controllers/chat.controller.js';
 
 // 1. 流式聊天主接口（你原来的核心功能）
 router.post('/chat/stream', chatController.streamChat);
-
 // 2. 会话管理接口
 router.post('/sessions', chatController.createChatSession);                    // 创建新会话
 router.get('/sessions', chatController.getChatSessionsByCharacter);           // 获取某个角色的所有会话列表
