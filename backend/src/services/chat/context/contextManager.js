@@ -94,6 +94,11 @@ class ContextManager {
       messages.push({ role: 'user', content: currentUserMessage });
     }
 
+    console.log(`[ContextManager] 构建上下文完成，消息总数: ${messages.length} 条`);
+    console.log(`[ContextManager] 最终消息总数: ${messages.length} 条`);
+    console.log(`[ContextManager] 最终消息示例:`, messages.slice(-5)); // 打印最后几条消息示例
+    console.log(`[ContextManager] 最终角色卡:`, character);
+    console.log(`[ContextManager] 最终会话ID: ${sessionId}`);
     return {
       messages,
       character,

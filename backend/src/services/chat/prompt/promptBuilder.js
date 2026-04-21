@@ -14,6 +14,7 @@ export class PromptBuilder {
    * @returns {string} System Prompt
    */
   buildSystemPrompt(character) {
+    console.log('[PromptBuilder] 构建 System Prompt，角色信息：', character);
     if (!character) {
       return "你是一个温柔体贴的AI伴侣，请自然、真实地与用户对话。";
     }
@@ -66,17 +67,17 @@ export class PromptBuilder {
     if (character.tags && character.tags.length > 0) {
       systemPrompt += `\n你的标签：${character.tags.join('、')}。\n`;
     }
-    if (character.kinks && character.kinks.length > 0) {
-      systemPrompt += `你的特殊癖好：${character.kinks.join('、')}。请在合适的时候自然体现。\n`;
-    }
+    // if (character.kinks && character.kinks.length > 0) {
+    //   systemPrompt += `你的特殊癖好：${character.kinks.join('、')}。请在合适的时候自然体现。\n`;
+    // }
 
     // Level 4: 示例对话（强烈推荐使用，能极大提升一致性）
-    if (character.example_dialogs && character.example_dialogs.length > 0) {
-      systemPrompt += `\n以下是你的对话示例，请严格模仿这种说话风格和长度：\n`;
-      character.example_dialogs.forEach((ex, index) => {
-        systemPrompt += `${index + 1}. ${ex}\n`;
-      });
-    }
+    // if (character.example_dialogs && character.example_dialogs.length > 0) {
+    //   systemPrompt += `\n以下是你的对话示例，请严格模仿这种说话风格和长度：\n`;
+    //   character.example_dialogs.forEach((ex, index) => {
+    //     systemPrompt += `${index + 1}. ${ex}\n`;
+    //   });
+    // }
 
     // 通用行为指令（提升整体质量）
     systemPrompt += `\n回复要求：

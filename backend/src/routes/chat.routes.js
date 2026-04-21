@@ -10,7 +10,7 @@ import chatController from '../controllers/chat.controller.js';
  */
 
 // 1. 流式聊天主接口（你原来的核心功能）
-router.post('/stream', chatController.streamChat);
+router.post('/chat/stream', chatController.streamChat);
 
 // 2. 会话管理接口
 router.post('/sessions', chatController.createChatSession);                    // 创建新会话
