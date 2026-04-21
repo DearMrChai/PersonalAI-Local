@@ -1,3 +1,4 @@
+// CharacterRepository
 import db from '../connection.js';
 import CharacterTagRepository from './CharacterTagRepository.js';   // ← 必须引入
 

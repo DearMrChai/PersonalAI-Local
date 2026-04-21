@@ -10,8 +10,8 @@ let currentProvider = null;
 export async function getLlmProvider() {
   console.log('getLlmProvider');
   if (!currentProvider) {
-    currentProvider = new QwenProvider();
-    // currentProvider = new LlamaProvider();
+    // currentProvider = new QwenProvider();
+    currentProvider = new LlamaProvider();
   }
   return currentProvider;
 }
