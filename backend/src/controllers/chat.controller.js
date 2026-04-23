@@ -1,147 +1,130 @@
-// src/controllers/chat.controller.js
-import { generateStreamResponse } from '../services/chat.service.js';
-import { contextManager } from '../services/chat/context/contextManager.js';
-import ChatSessionRepository from '../models/repositories/ChatSessionRepository.js';
-import ChatMessageRepository from '../models/repositories/ChatMessageRepository.js';
+// backend/src/controllers/chat.controller.js	
+import { generateStreamResponse, testConnection, getChatRecords, deleteChatRecord,clearChatRecords} from '../services/chat.service.js';
+import createResponse from '../utils/responseUtil.js';
 
 /**
- * 流式聊天主接口（你原来的核心功能，保留不动）
+ * 流式聊天接口
+ * @route POST /chat/stream
  */
-export const streamChat = async (req, res) => {
-  // 1. 设置 SSE 头信息
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-
+export async function handleStreamChat(req, res) {
   try {
-    console.log('[ChatController] 请求处理开始...');
+    // 解析参数
+    const { characterId, message, sessionId, userName = '用户' } = req.body;
+    
+    // 参数校验
+    if (!characterId || !message) {
+      return res.json(error('角色ID和消息内容不能为空'));
+    }
 
-    const { characterId, message, history, userName, sessionId } = req.body;
+    // 设置SSE响应头
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
 
-    console.log('[ChatController] 获取参数成功...');
-
-    // 使用 generateStreamResponse（你现有的服务层）
+    // 流式生成响应
     const stream = generateStreamResponse({
       characterId,
       message,
-      history,
-      userName,
-      sessionId   // 新增：支持传入 sessionId
+      sessionId,
+      userName
     });
 
-    // 遍历生成器并发送给前端
+    // 发送流式数据
     for await (const chunk of stream) {
-      const dataPacket = JSON.stringify({ 
-        type: 'chunk', 
-        text: chunk 
-      });
-      res.write(`data: ${dataPacket}\n\n`);
+      res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
     }
 
-    // 发送结束信号
-    res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+    // 发送结束标志
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
     res.end();
 
-  } catch (error) {
-    console.error('[ChatController] 请求处理错误:', error);
+  } catch (err) {
+    console.error('[ChatController] 聊天处理失败:', err.message);
     
     if (!res.headersSent) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: error.message }));
-    } else {
-      res.write(`data: ${JSON.stringify({ type: 'error', message: error.message })}\n\n`);
-      res.end();
+      return res.json(error(err.message || '聊天处理失败'));
     }
-  }
-};
-
-/**
- * 创建新会话（可选）
- */
-export const createChatSession = async (req, res) => {
-  try {
-    const { characterId, userId = 0, title = '新对话' } = req.body;
-    const session = await contextManager.getOrCreateSession(characterId, userId);
     
-    res.json({ 
-      success: true, 
-      data: session 
-    });
-  } catch (error) {
-    console.error('[ChatController] 创建会话失败:', error);
-    res.status(500).json({ success: false, message: error.message });
+    res.write(`event: error\ndata: ${JSON.stringify({ error: err.message })}\n\n`);
+    res.end();
   }
-};
+}
 
 /**
- * 获取某个角色的所有聊天会话列表
+ * 测试AI服务连接状态
+ * @route GET /chat/test
  */
-export const getChatSessionsByCharacter = async (req, res) => {
+export async function handleTestConnection(req, res) {
   try {
-    const { characterId } = req.query;
-
-    if (!characterId) {
-      return res.status(400).json({ success: false, message: "缺少 characterId 参数" });
-    }
-
-    const sessions = await ChatSessionRepository.findByCharacterId(characterId);
-
-    res.json({
-      success: true,
-      data: sessions
-    });
-  } catch (error) {
-    console.error('[ChatController] 获取会话列表失败:', error);
-    res.status(500).json({ success: false, message: error.message });
+    const status = await testConnection();
+    res.json(createResponse.success(status));
+  } catch (err) {
+    console.error('[ChatController] 连接测试失败:', err.message);
+    res.json(createResponse.error(err.message));
   }
-};
+}
 
 /**
- * 获取某次会话的具体消息记录
+ * 获取聊天记录
+ * @route GET /chat/records/:sessionId
  */
-export const getSessionMessages = async (req, res) => {
+export async function handleGetChatRecords(req, res) {
   try {
     const { sessionId } = req.params;
-
+    const { limit = 50 } = req.query;
+    
     if (!sessionId) {
-      return res.status(400).json({ success: false, message: "缺少 sessionId 参数" });
+      return res.json(createResponse.error('sessionId不能为空'));
     }
-
-    const messages = await ChatMessageRepository.findBySessionId(sessionId);
-
-    res.json({
-      success: true,
-      data: messages
-    });
-  } catch (error) {
-    console.error('[ChatController] 获取消息记录失败:', error);
-    res.status(500).json({ success: false, message: error.message });
+    
+    const records = await getChatRecords(sessionId, parseInt(limit));
+    res.json(createResponse.success(records));
+    
+  } catch (err) {
+    console.error('[ChatController] 获取聊天记录失败:', err.message);
+    res.json(createResponse.error(err.message));
   }
-};
+}
 
 /**
- * 清空某个会话的所有消息（可选）
+ * 删除单条聊天记录
+ * @route DELETE /chat/record/:messageId
  */
-export const clearSessionMessages = async (req, res) => {
+export async function handleDeleteChatRecord(req, res) {
+  try {
+    const { messageId } = req.params;
+    
+    if (!messageId) {
+      return res.json(error('messageId不能为空'));
+    }
+    
+    await deleteChatRecord(messageId);
+    res.json(createResponse.success(null, '删除成功'));
+    
+  } catch (err) {
+    console.error('[ChatController] 删除聊天记录失败:', err.message);
+    res.json(createResponse.error(err.message));
+  }
+}
+
+/**
+ * 清空会话的所有聊天记录
+ * @route DELETE /chat/records/:sessionId
+ */
+export async function handleClearChatRecords(req, res) {
   try {
     const { sessionId } = req.params;
-    await ChatMessageRepository.deleteBySessionId(sessionId);
-
-    res.json({
-      success: true,
-      message: `会话 ${sessionId} 的消息已清空`
-    });
-  } catch (error) {
-    console.error('[ChatController] 清空消息失败:', error);
-    res.status(500).json({ success: false, message: error.message });
+    
+    if (!sessionId) {
+      return res.json(error('sessionId不能为空'));
+    }
+    
+    await clearChatRecords(sessionId);
+    res.json(createResponse.success(null, '清空成功'));
+    
+  } catch (err) {
+    console.error('[ChatController] 清空聊天记录失败:', err.message);
+    res.json(createResponse.error(err.message));
   }
-};
-
-export default {
-  streamChat,
-  createChatSession,
-  getChatSessionsByCharacter,
-  getSessionMessages,
-  clearSessionMessages
-};
+}
